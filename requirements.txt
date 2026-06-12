@@ -1,0 +1,21 @@
+# Backend dependencies — Multi-Agent Research System
+# Pin ranges for reproducibility without unnecessary strictness.
+
+# LLM provider
+groq>=0.12.0,<1.0
+
+# Web search
+tavily-python>=0.5.0,<1.0
+
+# Environment management
+python-dotenv>=1.0.0,<2.0
+
+# Workflow orchestration (Day 3)
+langgraph>=0.2.0,<1.0
+
+# API server (Day 3)
+fastapi>=0.115.0,<1.0
+uvicorn>=0.32.0,<1.0
+
+# Testing
+pytest>=8.0,<9.0
