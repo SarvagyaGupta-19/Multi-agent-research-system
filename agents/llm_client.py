@@ -38,6 +38,7 @@ def call_llm(
     system_prompt: str = "",
     temperature: float = 0.3,
     settings: "Settings | None" = None,
+    json_mode: bool = False,
 ) -> str:
     """Call the Groq LLM with retry logic and error handling.
 
@@ -50,6 +51,9 @@ def call_llm(
         system_prompt: Optional system prompt for role/instruction.
         temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative).
         settings: Optional Settings instance. If None, loads from environment.
+        json_mode: If True, constrains the model to output valid JSON via
+            response_format={"type": "json_object"}. The prompt or system
+            prompt MUST mention "JSON" for this to work reliably.
 
     Returns:
         The LLM response content string.
@@ -73,16 +77,21 @@ def call_llm(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
+    # Build optional kwargs
+    create_kwargs = {
+        "model": settings.GROQ_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if json_mode:
+        create_kwargs["response_format"] = {"type": "json_object"}
+
     max_retries = settings.GROQ_MAX_RETRIES
     last_error = None
 
     for attempt in range(max_retries + 1):  # attempt 0 is the first try
         try:
-            response = client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=messages,
-                temperature=temperature,
-            )
+            response = client.chat.completions.create(**create_kwargs)
 
             # Extract content from the response
             if response.choices and response.choices[0].message.content:
