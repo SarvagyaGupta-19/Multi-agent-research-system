@@ -38,5 +38,6 @@ Thumbs.db
 *.log
 
 # SQLite (job storage, Day 3+)
+data/
 *.db
 *.sqlite3
