@@ -19,6 +19,7 @@ class TestCreateInitialState:
         assert state["topic"] == "AI safety"
         assert state["style"] == "academic"
         assert state["skip_memory"] is False
+        assert state["session_id"] == ""
         assert state["memory_context"] == ""
         assert state["raw_research"] == ""
         assert state["compressed_research"] == ""

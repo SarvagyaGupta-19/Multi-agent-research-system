@@ -1,8 +1,8 @@
 """
 Tests for the LangGraph workflow.
 
-Tests graph compilation, node wiring, and end-to-end execution
-with mocked agent functions.
+Tests graph compilation, node wiring, memory integration,
+and end-to-end execution with mocked agent functions.
 """
 
 from unittest.mock import patch, MagicMock
@@ -44,7 +44,6 @@ class TestBuildGraph:
     def test_graph_has_correct_nodes(self, mock_settings):
         """The compiled graph should have all expected nodes."""
         graph = build_graph(settings=mock_settings)
-        # LangGraph compiled graphs expose node names
         # Just verify it compiled — node internals are tested via invocation
         assert graph is not None
 
@@ -54,6 +53,8 @@ class TestBuildGraph:
 class TestRunResearch:
     """Tests for the end-to-end research pipeline."""
 
+    @patch("graph.workflow.write_memory")
+    @patch("graph.workflow.read_memory")
     @patch("graph.workflow.run_fact_checker")
     @patch("graph.workflow.run_writer")
     @patch("graph.workflow.run_analyst")
@@ -61,10 +62,10 @@ class TestRunResearch:
     @patch("graph.workflow.run_researcher")
     def test_full_pipeline_invokes_all_agents(
         self, mock_researcher, mock_compress, mock_analyst,
-        mock_writer, mock_fact_checker, mock_settings,
+        mock_writer, mock_fact_checker, mock_read_mem, mock_write_mem,
+        mock_settings,
     ):
         """All agent nodes should be called in sequence."""
-        # Each mock returns the state unchanged (pass-through)
         def passthrough(state, settings=None):
             return state
 
@@ -73,6 +74,8 @@ class TestRunResearch:
         mock_analyst.side_effect = passthrough
         mock_writer.side_effect = passthrough
         mock_fact_checker.side_effect = passthrough
+        mock_read_mem.return_value = ""
+        mock_write_mem.return_value = False
 
         result = run_research(
             topic="test topic",
@@ -85,6 +88,8 @@ class TestRunResearch:
         assert result["style"] == "blog"
         assert result["skip_memory"] is True
 
+    @patch("graph.workflow.write_memory")
+    @patch("graph.workflow.read_memory")
     @patch("graph.workflow.run_fact_checker")
     @patch("graph.workflow.run_writer")
     @patch("graph.workflow.run_analyst")
@@ -92,10 +97,10 @@ class TestRunResearch:
     @patch("graph.workflow.run_researcher")
     def test_pipeline_passes_state_through_nodes(
         self, mock_researcher, mock_compress, mock_analyst,
-        mock_writer, mock_fact_checker, mock_settings,
+        mock_writer, mock_fact_checker, mock_read_mem, mock_write_mem,
+        mock_settings,
     ):
         """State should flow correctly from one node to the next."""
-
         def researcher_fn(state, settings=None):
             state["raw_research"] = "Research about testing"
             state["sources"] = [{"url": "https://test.com", "title": "Test", "snippet": "Test snippet"}]
@@ -123,6 +128,8 @@ class TestRunResearch:
         mock_analyst.side_effect = analyst_fn
         mock_writer.side_effect = writer_fn
         mock_fact_checker.side_effect = fact_checker_fn
+        mock_read_mem.return_value = ""
+        mock_write_mem.return_value = False
 
         result = run_research(topic="test topic", settings=mock_settings)
 
@@ -142,3 +149,70 @@ class TestRunResearch:
         """run_research should raise ValueError for whitespace-only topic."""
         with pytest.raises(ValueError, match="topic is required"):
             run_research(topic="   ", settings=mock_settings)
+
+    @patch("graph.workflow.write_memory")
+    @patch("graph.workflow.read_memory")
+    @patch("graph.workflow.run_fact_checker")
+    @patch("graph.workflow.run_writer")
+    @patch("graph.workflow.run_analyst")
+    @patch("graph.workflow.compress_research")
+    @patch("graph.workflow.run_researcher")
+    def test_session_id_flows_through_pipeline(
+        self, mock_researcher, mock_compress, mock_analyst,
+        mock_writer, mock_fact_checker, mock_read_mem, mock_write_mem,
+        mock_settings,
+    ):
+        """session_id should be preserved in state throughout the pipeline."""
+        def passthrough(state, settings=None):
+            return state
+
+        mock_researcher.side_effect = passthrough
+        mock_compress.side_effect = passthrough
+        mock_analyst.side_effect = passthrough
+        mock_writer.side_effect = passthrough
+        mock_fact_checker.side_effect = passthrough
+        mock_read_mem.return_value = ""
+        mock_write_mem.return_value = False
+
+        result = run_research(
+            topic="test",
+            session_id="session-abc",
+            settings=mock_settings,
+        )
+
+        assert result["session_id"] == "session-abc"
+
+    @patch("graph.workflow.write_memory")
+    @patch("graph.workflow.read_memory")
+    @patch("graph.workflow.run_fact_checker")
+    @patch("graph.workflow.run_writer")
+    @patch("graph.workflow.run_analyst")
+    @patch("graph.workflow.compress_research")
+    @patch("graph.workflow.run_researcher")
+    def test_skip_memory_bypasses_memory_nodes(
+        self, mock_researcher, mock_compress, mock_analyst,
+        mock_writer, mock_fact_checker, mock_read_mem, mock_write_mem,
+        mock_settings,
+    ):
+        """With skip_memory=True, memory read/write should not be called."""
+        def passthrough(state, settings=None):
+            return state
+
+        mock_researcher.side_effect = passthrough
+        mock_compress.side_effect = passthrough
+        mock_analyst.side_effect = passthrough
+        mock_writer.side_effect = passthrough
+        mock_fact_checker.side_effect = passthrough
+        # These should NOT be called
+        mock_read_mem.return_value = "should not appear"
+        mock_write_mem.return_value = True
+
+        result = run_research(
+            topic="test",
+            skip_memory=True,
+            session_id="session-abc",
+            settings=mock_settings,
+        )
+
+        # Memory context should remain empty since skip_memory=True
+        assert result["memory_context"] == ""

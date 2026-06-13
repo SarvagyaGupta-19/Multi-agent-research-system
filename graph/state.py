@@ -30,6 +30,7 @@ class ResearchState(TypedDict):
     - topic: The user's research query
     - style: Writing style (e.g., "academic", "blog", "executive summary")
     - skip_memory: If True, bypass Mem0 context lookup
+    - session_id: Session identifier for memory scoping
     - memory_context: Prior context retrieved from Mem0 (empty if skipped)
     - raw_research: Raw concatenated search results from the researcher
     - compressed_research: Truncated/summarized research for downstream agents
@@ -43,6 +44,7 @@ class ResearchState(TypedDict):
     topic: str
     style: str
     skip_memory: bool
+    session_id: str
     memory_context: str
     raw_research: str
     compressed_research: str
@@ -58,6 +60,7 @@ def create_initial_state(
     topic: str,
     style: str = "academic",
     skip_memory: bool = False,
+    session_id: str = "",
 ) -> ResearchState:
     """Create a fully initialized ResearchState with empty defaults.
 
@@ -65,6 +68,7 @@ def create_initial_state(
         topic: The research topic/query.
         style: The desired writing style.
         skip_memory: Whether to skip Mem0 context lookup.
+        session_id: Session identifier for memory scoping.
 
     Returns:
         A ResearchState dict with all fields initialized.
@@ -79,6 +83,7 @@ def create_initial_state(
         topic=topic.strip(),
         style=style.strip() if style else "academic",
         skip_memory=skip_memory,
+        session_id=session_id,
         memory_context="",
         raw_research="",
         compressed_research="",
@@ -111,6 +116,7 @@ def validate_state(state: dict) -> list[str]:
         "topic": str,
         "style": str,
         "skip_memory": bool,
+        "session_id": str,
         "memory_context": str,
         "raw_research": str,
         "compressed_research": str,
