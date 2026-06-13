@@ -93,7 +93,9 @@ class HealthResponse(BaseModel):
 
 # --- Background worker ---
 
-def _run_research_worker(job_id: str, topic: str, style: str, skip_memory: bool) -> None:
+def _run_research_worker(
+    job_id: str, topic: str, style: str, skip_memory: bool, session_id: str,
+) -> None:
     """Background worker that runs the research pipeline for a job.
 
     Updates job status and result/error in the store.
@@ -103,6 +105,7 @@ def _run_research_worker(job_id: str, topic: str, style: str, skip_memory: bool)
         topic: Research topic.
         style: Writing style.
         skip_memory: Whether to skip memory lookup.
+        session_id: Session ID for memory scoping.
     """
     store = _get_store()
 
@@ -115,6 +118,7 @@ def _run_research_worker(job_id: str, topic: str, style: str, skip_memory: bool)
             topic=topic,
             style=style,
             skip_memory=skip_memory,
+            session_id=session_id,
             settings=settings,
         )
 
@@ -175,7 +179,7 @@ async def create_research_job(request: ResearchRequest):
     # Launch background worker
     worker = threading.Thread(
         target=_run_research_worker,
-        args=(job_id, topic, request.style, request.skip_memory),
+        args=(job_id, topic, request.style, request.skip_memory, request.session_id),
         daemon=True,
         name=f"research-worker-{job_id[:8]}",
     )
