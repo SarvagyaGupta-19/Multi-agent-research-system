@@ -32,10 +32,18 @@ app = FastAPI(
     version="0.3.0",
 )
 
-# CORS — allow all origins for development; tighten for production
+# Load settings on startup to configure the app and fail fast if keys are missing
+try:
+    settings = load_settings()
+    allowed_origins = settings.ALLOWED_ORIGINS
+except Exception as e:
+    logger.warning("Failed to load settings on startup for CORS: %s. Defaulting to localhost.", e)
+    allowed_origins = ["http://localhost:3000"]
+
+# CORS — secured via config
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

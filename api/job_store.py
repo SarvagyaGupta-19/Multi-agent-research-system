@@ -6,6 +6,7 @@ so that jobs survive backend restarts. Thread-safe for use with
 background worker threads.
 """
 
+import contextlib
 import json
 import logging
 import sqlite3
@@ -44,21 +45,21 @@ class JobStore:
     def _init_db(self) -> None:
         """Create the jobs table if it doesn't exist."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._get_conn() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS jobs (
-                    job_id      TEXT PRIMARY KEY,
-                    status      TEXT NOT NULL DEFAULT 'queued',
-                    topic       TEXT NOT NULL,
-                    style       TEXT NOT NULL DEFAULT 'academic',
-                    session_id  TEXT NOT NULL DEFAULT '',
-                    created_at  TEXT NOT NULL,
-                    updated_at  TEXT NOT NULL,
-                    result_json TEXT DEFAULT NULL,
-                    error       TEXT DEFAULT NULL
-                )
-            """)
-            conn.commit()
+        with contextlib.closing(self._get_conn()) as conn:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS jobs (
+                        job_id      TEXT PRIMARY KEY,
+                        status      TEXT NOT NULL DEFAULT 'queued',
+                        topic       TEXT NOT NULL,
+                        style       TEXT NOT NULL DEFAULT 'academic',
+                        session_id  TEXT NOT NULL DEFAULT '',
+                        created_at  TEXT NOT NULL,
+                        updated_at  TEXT NOT NULL,
+                        result_json TEXT DEFAULT NULL,
+                        error       TEXT DEFAULT NULL
+                    )
+                """)
         logger.info("JobStore: initialized at %s", self._db_path)
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -91,15 +92,15 @@ class JobStore:
         now = self._now()
 
         with self._lock:
-            with self._get_conn() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO jobs (job_id, status, topic, style, session_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (job_id, "queued", topic, style, session_id, now, now),
-                )
-                conn.commit()
+            with contextlib.closing(self._get_conn()) as conn:
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO jobs (job_id, status, topic, style, session_id, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (job_id, "queued", topic, style, session_id, now, now),
+                    )
 
         logger.info("JobStore: created job %s (topic='%s')", job_id, topic)
         return job_id
@@ -115,10 +116,11 @@ class JobStore:
             If result_json is present, it's parsed back to a dict.
         """
         with self._lock:
-            with self._get_conn() as conn:
-                row = conn.execute(
-                    "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
-                ).fetchone()
+            with contextlib.closing(self._get_conn()) as conn:
+                with conn:
+                    row = conn.execute(
+                        "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
+                    ).fetchone()
 
         if row is None:
             return None
@@ -156,13 +158,13 @@ class JobStore:
             )
 
         with self._lock:
-            with self._get_conn() as conn:
-                cursor = conn.execute(
-                    "UPDATE jobs SET status = ?, updated_at = ? WHERE job_id = ?",
-                    (status, self._now(), job_id),
-                )
-                conn.commit()
-                updated = cursor.rowcount > 0
+            with contextlib.closing(self._get_conn()) as conn:
+                with conn:
+                    cursor = conn.execute(
+                        "UPDATE jobs SET status = ?, updated_at = ? WHERE job_id = ?",
+                        (status, self._now(), job_id),
+                    )
+                    updated = cursor.rowcount > 0
 
         if updated:
             logger.info("JobStore: updated job %s status to '%s'", job_id, status)
@@ -184,17 +186,17 @@ class JobStore:
         result_json = json.dumps(result, default=str)
 
         with self._lock:
-            with self._get_conn() as conn:
-                cursor = conn.execute(
-                    """
-                    UPDATE jobs
-                    SET status = 'complete', result_json = ?, updated_at = ?
-                    WHERE job_id = ?
-                    """,
-                    (result_json, self._now(), job_id),
-                )
-                conn.commit()
-                updated = cursor.rowcount > 0
+            with contextlib.closing(self._get_conn()) as conn:
+                with conn:
+                    cursor = conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'complete', result_json = ?, updated_at = ?
+                        WHERE job_id = ?
+                        """,
+                        (result_json, self._now(), job_id),
+                    )
+                    updated = cursor.rowcount > 0
 
         if updated:
             logger.info("JobStore: stored result for job %s", job_id)
@@ -211,17 +213,17 @@ class JobStore:
             True if the job was found and updated, False otherwise.
         """
         with self._lock:
-            with self._get_conn() as conn:
-                cursor = conn.execute(
-                    """
-                    UPDATE jobs
-                    SET status = 'failed', error = ?, updated_at = ?
-                    WHERE job_id = ?
-                    """,
-                    (error, self._now(), job_id),
-                )
-                conn.commit()
-                updated = cursor.rowcount > 0
+            with contextlib.closing(self._get_conn()) as conn:
+                with conn:
+                    cursor = conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'failed', error = ?, updated_at = ?
+                        WHERE job_id = ?
+                        """,
+                        (error, self._now(), job_id),
+                    )
+                    updated = cursor.rowcount > 0
 
         if updated:
             logger.info("JobStore: stored error for job %s", job_id)

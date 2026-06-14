@@ -89,16 +89,18 @@ class TestParseInt:
 class TestLoadSettings:
     """Tests for the load_settings function."""
 
+    @patch("config.load_dotenv")
     @patch.dict(os.environ, {
         "GROQ_API_KEY": "gsk_env_test",
         "TAVILY_API_KEY": "tvly_env_test",
     }, clear=False)
-    def test_loads_from_env(self):
+    def test_loads_from_env(self, mock_load_dotenv):
         """Should load required keys from environment."""
         s = load_settings()
         assert s.GROQ_API_KEY == "gsk_env_test"
         assert s.TAVILY_API_KEY == "tvly_env_test"
 
+    @patch("config.load_dotenv")
     @patch.dict(os.environ, {
         "GROQ_API_KEY": "gsk_test",
         "TAVILY_API_KEY": "tvly_test",
@@ -106,25 +108,27 @@ class TestLoadSettings:
         "GROQ_TIMEOUT": "60",
         "LOG_LEVEL": "debug",
     }, clear=False)
-    def test_loads_optional_overrides(self):
+    def test_loads_optional_overrides(self, mock_load_dotenv):
         """Should apply optional env var overrides."""
         s = load_settings()
         assert s.GROQ_MODEL == "mixtral-8x7b-32768"
         assert s.GROQ_TIMEOUT == 60
         assert s.LOG_LEVEL == "DEBUG"  # uppercased
 
+    @patch("config.load_dotenv")
     @patch.dict(os.environ, {}, clear=True)
-    def test_missing_required_raises(self):
+    def test_missing_required_raises(self, mock_load_dotenv):
         """Should raise when required keys are absent."""
         with pytest.raises(ConfigurationError, match="Missing required"):
             load_settings()
 
+    @patch("config.load_dotenv")
     @patch.dict(os.environ, {
         "GROQ_API_KEY": "gsk_test",
         "TAVILY_API_KEY": "tvly_test",
         "GROQ_TIMEOUT": "abc",
     }, clear=False)
-    def test_invalid_int_raises(self):
+    def test_invalid_int_raises(self, mock_load_dotenv):
         """Should raise when an int env var has a non-numeric value."""
         with pytest.raises(ConfigurationError, match="GROQ_TIMEOUT"):
             load_settings()

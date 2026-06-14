@@ -45,6 +45,9 @@ class Settings:
     # Context management
     MAX_CONTEXT_CHARS: int = 16000
 
+    # API Security
+    ALLOWED_ORIGINS: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
+
     # Logging
     LOG_LEVEL: str = "INFO"
 
@@ -133,6 +136,9 @@ def load_settings(env_path: str | None = None) -> Settings:
             f"See .env.example for reference."
         )
 
+    allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+    allowed_origins = [o.strip() for o in allowed_origins_env.split(",")] if allowed_origins_env else ["http://localhost:3000"]
+
     settings = Settings(
         GROQ_API_KEY=groq_key,
         TAVILY_API_KEY=tavily_key,
@@ -142,6 +148,7 @@ def load_settings(env_path: str | None = None) -> Settings:
         GROQ_MAX_RETRIES=_parse_int(os.getenv("GROQ_MAX_RETRIES", ""), "GROQ_MAX_RETRIES", 3),
         TAVILY_MAX_RESULTS=_parse_int(os.getenv("TAVILY_MAX_RESULTS", ""), "TAVILY_MAX_RESULTS", 5),
         MAX_CONTEXT_CHARS=_parse_int(os.getenv("MAX_CONTEXT_CHARS", ""), "MAX_CONTEXT_CHARS", 16000),
+        ALLOWED_ORIGINS=allowed_origins,
         LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
 

@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian-950: #020617;
+  --color-obsidian-900: #0f172a;
+  --color-obsidian-800: #1e293b;
+  --color-primary-cyan: #22d3ee;
+  --color-primary-cyan-dim: #0891b2;
+  --color-secondary-green: #4ade80;
+  --color-secondary-green-dim: #16a34a;
+  
+  --color-background: var(--color-obsidian-950);
+  --color-foreground: #f1f5f9;
+  --color-muted: #64748b;
+
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+  
+  --animate-pulse-slow: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+
+  @keyframes pulse-slow {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: .5;
+    }
+  }
+
+  @keyframes glow {
+    0% {
+      box-shadow: 0 0 5px rgba(34, 211, 238, 0.2);
+    }
+    100% {
+      box-shadow: 0 0 30px rgba(34, 211, 238, 0.8);
+    }
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+/* Base styles for the glass cards */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.15); /* Much more transparent */
+  backdrop-filter: blur(8px); /* Less blur to see stars */
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-luminous {
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(34, 211, 238, 0.3); /* Stronger Cyan tint */
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), 0 0 20px rgba(34, 211, 238, 0.1) inset;
+}

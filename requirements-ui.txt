@@ -1,3 +1,0 @@
-# Frontend dependencies — Multi-Agent Research System
-streamlit>=1.40.0,<2.0
-requests>=2.32.0,<3.0
