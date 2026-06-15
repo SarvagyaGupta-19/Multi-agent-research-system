@@ -1,5 +1,5 @@
-// src/lib/api.ts
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use the Next.js rewrite proxy to avoid browser Mixed Content errors (HTTPS -> HTTP)
+const API_BASE_URL = "/api/proxy";
 
 export interface ResearchRequest {
   topic: string;
