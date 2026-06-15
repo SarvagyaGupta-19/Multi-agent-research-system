@@ -271,3 +271,44 @@ class TestCallLlm:
 
         call_args = mock_client.chat.completions.create.call_args
         assert call_args.kwargs["model"] == "mixtral-8x7b-32768"
+
+    @patch("agents.llm_client.Groq")
+    def test_model_override(self, mock_groq_cls):
+        """Model override should take precedence over settings."""
+        mock_client = MagicMock()
+        mock_groq_cls.return_value = mock_client
+        mock_client.chat.completions.create.return_value = _make_mock_response("ok")
+
+        settings = _make_settings(GROQ_MODEL="mixtral-8x7b-32768")
+        call_llm(prompt="test", settings=settings, model_override="llama3-8b-8192")
+
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["model"] == "llama3-8b-8192"
+
+    @patch("agents.llm_client.time.sleep")
+    @patch("agents.llm_client.Groq")
+    def test_rate_limit_exhausted_raises_exception(self, mock_groq_cls, mock_sleep):
+        """RateLimitError exhaustion should raise Exception."""
+        from groq import RateLimitError
+
+        mock_client = MagicMock()
+        mock_groq_cls.return_value = mock_client
+
+        mock_http_response = MagicMock()
+        mock_http_response.status_code = 429
+        mock_http_response.headers = {}
+        mock_http_response.text = "rate limited"
+
+        rate_limit_error = RateLimitError(
+            message="Rate limit exceeded. Please try again in 30m.",
+            response=mock_http_response,
+            body={"error": {"message": "Please try again in 30m."}},
+        )
+
+        # Fail on all attempts
+        mock_client.chat.completions.create.side_effect = rate_limit_error
+
+        settings = _make_settings(GROQ_MAX_RETRIES=1)
+        
+        with pytest.raises(Exception, match="Rate Limit Exceeded: Please try again in 30m."):
+            call_llm(prompt="test", settings=settings)

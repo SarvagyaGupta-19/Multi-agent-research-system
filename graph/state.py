@@ -29,6 +29,7 @@ class ResearchState(TypedDict):
     Every field has a defined type and purpose:
     - topic: The user's research query
     - style: Writing style (e.g., "academic", "blog", "executive summary")
+    - model: The Groq LLM model selected by the user
     - skip_memory: If True, bypass Mem0 context lookup
     - session_id: Session identifier for memory scoping
     - memory_context: Prior context retrieved from Mem0 (empty if skipped)
@@ -43,6 +44,7 @@ class ResearchState(TypedDict):
     """
     topic: str
     style: str
+    model: str
     skip_memory: bool
     session_id: str
     memory_context: str
@@ -59,6 +61,7 @@ class ResearchState(TypedDict):
 def create_initial_state(
     topic: str,
     style: str = "academic",
+    model: str = "llama-3.3-70b-versatile",
     skip_memory: bool = False,
     session_id: str = "",
 ) -> ResearchState:
@@ -67,6 +70,7 @@ def create_initial_state(
     Args:
         topic: The research topic/query.
         style: The desired writing style.
+        model: The LLM model to use.
         skip_memory: Whether to skip Mem0 context lookup.
         session_id: Session identifier for memory scoping.
 
@@ -82,6 +86,7 @@ def create_initial_state(
     return ResearchState(
         topic=topic.strip(),
         style=style.strip() if style else "academic",
+        model=model.strip() if model else "llama-3.3-70b-versatile",
         skip_memory=skip_memory,
         session_id=session_id,
         memory_context="",
@@ -115,6 +120,7 @@ def validate_state(state: dict) -> list[str]:
     field_types = {
         "topic": str,
         "style": str,
+        "model": str,
         "skip_memory": bool,
         "session_id": str,
         "memory_context": str,

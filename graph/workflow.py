@@ -192,6 +192,7 @@ def build_graph(settings: "Settings | None" = None) -> StateGraph:
 def run_research(
     topic: str,
     style: str = "academic",
+    model: str = "llama-3.3-70b-versatile",
     skip_memory: bool = False,
     session_id: str = "",
     settings: "Settings | None" = None,
@@ -203,6 +204,7 @@ def run_research(
     Args:
         topic: The research topic/query.
         style: The desired writing style (academic, blog, executive summary, technical).
+        model: The LLM model to use.
         skip_memory: Whether to skip Mem0 context lookup and write.
         session_id: Session identifier for memory scoping.
         settings: Optional Settings instance. If None, loads from environment.
@@ -226,6 +228,7 @@ def run_research(
     initial_state = create_initial_state(
         topic=topic,
         style=style,
+        model=model,
         skip_memory=skip_memory,
         session_id=session_id,
     )

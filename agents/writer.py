@@ -140,6 +140,7 @@ def run_writer(state: ResearchState, settings: "Settings | None" = None) -> Rese
         system_prompt=_SYSTEM_PROMPT,
         temperature=0.4,  # slightly higher for creative writing
         settings=settings,
+        model_override=state.get("model"),
     )
 
     if not result:

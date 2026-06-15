@@ -39,6 +39,7 @@ def call_llm(
     temperature: float = 0.3,
     settings: "Settings | None" = None,
     json_mode: bool = False,
+    model_override: str | None = None,
 ) -> str:
     """Call the Groq LLM with retry logic and error handling.
 
@@ -54,11 +55,12 @@ def call_llm(
         json_mode: If True, constrains the model to output valid JSON via
             response_format={"type": "json_object"}. The prompt or system
             prompt MUST mention "JSON" for this to work reliably.
+        model_override: Optional model name to use instead of settings.GROQ_MODEL.
 
     Returns:
         The LLM response content string.
-        Returns empty string on exhausted retries or permanent failure.
-        Callers MUST check for empty returns and handle accordingly.
+        Returns empty string on exhausted retries or permanent failure, EXCEPT for
+        rate limits which will raise an Exception to halt the pipeline immediately.
     """
     if settings is None:
         settings = load_settings()
@@ -79,7 +81,7 @@ def call_llm(
 
     # Build optional kwargs
     create_kwargs = {
-        "model": settings.GROQ_MODEL,
+        "model": model_override if model_override else settings.GROQ_MODEL,
         "messages": messages,
         "temperature": temperature,
     }
@@ -150,4 +152,16 @@ def call_llm(
         max_retries + 1,
         last_error,
     )
+    
+    # If the job failed specifically because of a rate limit, raise an exception
+    # to halt the pipeline and report the exact wait time to the user.
+    if isinstance(last_error, RateLimitError):
+        error_message = str(last_error)
+        try:
+            if hasattr(last_error, 'body') and isinstance(last_error.body, dict):
+                error_message = last_error.body.get('error', {}).get('message', error_message)
+        except Exception:
+            pass
+        raise Exception(f"Rate Limit Exceeded: {error_message}")
+
     return ""

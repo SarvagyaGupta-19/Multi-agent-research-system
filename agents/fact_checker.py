@@ -62,12 +62,13 @@ Example output:
 """
 
 
-def _extract_claims(report: str, settings: "Settings | None" = None) -> list[str]:
+def _extract_claims(report: str, settings: "Settings | None" = None, model_override: str | None = None) -> list[str]:
     """Extract verifiable claims from a report using LLM with JSON mode.
 
     Args:
         report: The writer's report text.
         settings: Optional Settings instance.
+        model_override: Optional model name.
 
     Returns:
         List of claim strings. Empty list on failure.
@@ -84,6 +85,7 @@ def _extract_claims(report: str, settings: "Settings | None" = None) -> list[str
         temperature=0.1,  # low temp for extraction accuracy
         settings=settings,
         json_mode=True,
+        model_override=model_override,
     )
 
     if not raw:
@@ -107,6 +109,7 @@ def _verify_claims(
     claims: list[str],
     sources_text: str,
     settings: "Settings | None" = None,
+    model_override: str | None = None,
 ) -> list[ClaimItem]:
     """Verify claims against source data using LLM with JSON mode.
 
@@ -114,6 +117,7 @@ def _verify_claims(
         claims: List of claim strings to verify.
         sources_text: Concatenated source data for cross-reference.
         settings: Optional Settings instance.
+        model_override: Optional model name.
 
     Returns:
         List of ClaimItem dicts. Empty list on failure.
@@ -133,6 +137,7 @@ def _verify_claims(
         temperature=0.1,
         settings=settings,
         json_mode=True,
+        model_override=model_override,
     )
 
     if not raw:
@@ -253,7 +258,7 @@ def run_fact_checker(
     logger.info("Fact-checker: starting fact-check of report (%d chars)", len(report))
 
     # --- Pass 1: Extract claims ---
-    raw_claims = _extract_claims(report, settings=settings)
+    raw_claims = _extract_claims(report, settings=settings, model_override=state.get("model"))
 
     if not raw_claims:
         error_msg = "Fact-checker: could not extract any claims from the report"
@@ -272,7 +277,7 @@ def run_fact_checker(
 
     # --- Pass 2: Verify claims ---
     sources_text = _build_sources_text(state)
-    verified_claims = _verify_claims(raw_claims, sources_text, settings=settings)
+    verified_claims = _verify_claims(raw_claims, sources_text, settings=settings, model_override=state.get("model"))
 
     if not verified_claims:
         # Verification failed but extraction succeeded — create uncertain claims

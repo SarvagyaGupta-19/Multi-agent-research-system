@@ -99,6 +99,7 @@ def run_analyst(state: ResearchState, settings: "Settings | None" = None) -> Res
         system_prompt=_SYSTEM_PROMPT,
         temperature=0.3,
         settings=settings,
+        model_override=state.get("model"),
     )
 
     if not result:

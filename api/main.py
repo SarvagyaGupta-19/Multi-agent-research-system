@@ -70,6 +70,10 @@ class ResearchRequest(BaseModel):
         default="academic",
         description="Writing style: academic, blog, executive summary, or technical.",
     )
+    model: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="The Groq LLM model to use.",
+    )
     skip_memory: bool = Field(default=False, description="If true, skip Mem0 context lookup.")
     session_id: str = Field(default="", description="Session ID for memory scoping.")
 
@@ -102,7 +106,7 @@ class HealthResponse(BaseModel):
 # --- Background worker ---
 
 def _run_research_worker(
-    job_id: str, topic: str, style: str, skip_memory: bool, session_id: str,
+    job_id: str, topic: str, style: str, model: str, skip_memory: bool, session_id: str,
 ) -> None:
     """Background worker that runs the research pipeline for a job.
 
@@ -112,6 +116,7 @@ def _run_research_worker(
         job_id: The job ID to update.
         topic: Research topic.
         style: Writing style.
+        model: The Groq model to use.
         skip_memory: Whether to skip memory lookup.
         session_id: Session ID for memory scoping.
     """
@@ -119,12 +124,13 @@ def _run_research_worker(
 
     try:
         store.update_status(job_id, "running")
-        logger.info("Worker: starting research for job %s (topic='%s')", job_id, topic)
+        logger.info("Worker: starting research for job %s (topic='%s', model='%s')", job_id, topic, model)
 
         settings = load_settings()
         result = run_research(
             topic=topic,
             style=style,
+            model=model,
             skip_memory=skip_memory,
             session_id=session_id,
             settings=settings,
@@ -187,7 +193,7 @@ async def create_research_job(request: ResearchRequest):
     # Launch background worker
     worker = threading.Thread(
         target=_run_research_worker,
-        args=(job_id, topic, request.style, request.skip_memory, request.session_id),
+        args=(job_id, topic, request.style, request.model, request.skip_memory, request.session_id),
         daemon=True,
         name=f"research-worker-{job_id[:8]}",
     )

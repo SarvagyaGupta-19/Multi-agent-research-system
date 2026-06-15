@@ -57,7 +57,7 @@ class TestReadMemory:
         assert "error correction" in result
         mock_client.search.assert_called_once_with(
             query="quantum computing",
-            user_id="session-123",
+            filters={"user_id": "session-123"},
             limit=5,
         )
 

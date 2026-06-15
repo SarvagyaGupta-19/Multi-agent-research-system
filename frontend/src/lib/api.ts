@@ -4,6 +4,7 @@ const API_BASE_URL = "/api/proxy";
 export interface ResearchRequest {
   topic: string;
   style: string;
+  model?: string;
   skip_memory: boolean;
   session_id: string;
 }

@@ -16,6 +16,7 @@ export default function Home() {
   const [appState, setAppState] = useState<AppState>("INPUT");
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState("academic");
+  const [model, setModel] = useState("llama-3.3-70b-versatile");
   const [skipMemory, setSkipMemory] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<JobStatusResponse | null>(null);
@@ -37,6 +38,7 @@ export default function Home() {
       const response = await submitResearchJob({
         topic,
         style,
+        model,
         skip_memory: skipMemory,
         session_id: sessionId,
       });
@@ -168,23 +170,38 @@ export default function Home() {
                   </div>
 
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    {/* Output Style Selection */}
-                    <div className="w-full md:w-auto">
-                      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Synthesis Format</label>
-                      <div className="flex flex-wrap gap-2">
-                        {["academic", "blog", "executive summary", "technical"].map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => setStyle(s)}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                              style === s 
-                                ? "bg-white text-black" 
-                                : "bg-slate-800/50 text-slate-300 border border-slate-700 hover:bg-slate-700"
-                            }`}
-                          >
-                            {s}
-                          </button>
-                        ))}
+                    <div className="w-full md:w-auto flex flex-col md:flex-row gap-6">
+                      {/* Output Style Selection */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Synthesis Format</label>
+                        <div className="flex flex-wrap gap-2">
+                          {["academic", "blog", "executive summary", "technical"].map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setStyle(s)}
+                              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                style === s 
+                                  ? "bg-white text-black" 
+                                  : "bg-slate-800/50 text-slate-300 border border-slate-700 hover:bg-slate-700"
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Model Selection */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">LLM Model</label>
+                        <select 
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                          className="bg-slate-800/50 text-slate-300 border border-slate-700 hover:bg-slate-700 px-4 py-2.5 rounded-md text-sm font-medium transition-colors outline-none cursor-pointer h-[38px]"
+                        >
+                          <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+                          <option value="llama3-8b-8192">Llama 3 8B (Fast)</option>
+                        </select>
                       </div>
                     </div>
 
@@ -261,12 +278,14 @@ export default function Home() {
               animate={{ opacity: 1 }}
               className="w-full max-w-2xl"
             >
-              <GlassCard className="p-8 border border-red-900/50 bg-black/80">
-                <div className="flex items-center space-x-3 text-red-400 mb-4">
+              <GlassCard className={`p-8 border bg-black/80 ${errorMsg.includes('Rate Limit Exceeded') ? 'border-amber-500/50' : 'border-red-900/50'}`}>
+                <div className={`flex items-center space-x-3 mb-4 ${errorMsg.includes('Rate Limit Exceeded') ? 'text-amber-400' : 'text-red-400'}`}>
                   <AlertTriangle className="w-8 h-8" />
-                  <h2 className="text-2xl font-heading font-medium">Operation Failed</h2>
+                  <h2 className="text-2xl font-heading font-medium">
+                    {errorMsg.includes('Rate Limit Exceeded') ? 'Rate Limit Reached' : 'Operation Failed'}
+                  </h2>
                 </div>
-                <p className="text-slate-300 mb-8 font-mono bg-slate-900/80 p-4 rounded-md text-sm border border-slate-800">
+                <p className="text-slate-300 mb-8 font-mono bg-slate-900/80 p-4 rounded-md text-sm border border-slate-800 leading-relaxed">
                   {errorMsg}
                 </p>
                 <button
