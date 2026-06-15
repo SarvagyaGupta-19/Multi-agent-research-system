@@ -117,7 +117,7 @@ pytest
 
 ## Deployment
 
-To deploy this system to production, see the [Deployment Guide](deploy/README.md).
+The backend is deployed to an AWS EC2 instance running Ubuntu, managed by Systemd and proxied through Nginx. The frontend is hosted globally on Vercel's Edge Network.
 
 ## License
 
