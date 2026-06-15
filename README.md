@@ -1,113 +1,93 @@
-# Multi-Agent Research System 🧠
+# Multi-Agent Research System
 
-An enterprise-grade, multi-agent AI system built to automate deep research, synthesize findings, and fact-check information using an orchestrated pipeline of specialized agents.
+An automated pipeline that searches the web, synthesizes data, and fact-checks information to produce reliable research reports.
 
-## 🌟 Overview
-
-The Multi-Agent Research System takes a user's topic and processes it through a sophisticated LangGraph-powered pipeline:
-1. **Researcher Agent**: Scours the internet for up-to-date data (via Tavily API).
-2. **Compressor Node**: Distills the raw search data into context-dense insights to prevent context window bloat.
-3. **Analyst Agent**: Reviews the compressed data, synthesizes themes, and structures a coherent narrative.
-4. **Writer Agent**: Drafts a comprehensive, professionally formatted report in the requested style (Academic, Bulleted, Executive Summary).
-5. **Fact-Checker Agent**: Verifies the final report against the original raw search data, calculates a Trust Score, and extracts verifiable claims.
-
-The system utilizes **Mem0** to maintain long-term memory across sessions, allowing the agents to "remember" past research contexts for the same user or session.
-
-## 🏗️ Architecture
-
-- **Backend**: FastAPI (Python 3.12)
-- **AI Orchestration**: LangGraph & LangChain
-- **LLM Provider**: Groq (Llama-3-70b-8192 for blazing fast inference)
-- **Search Engine**: Tavily
-- **Long-term Memory**: Mem0 (mem0ai)
-- **Database**: SQLite (Job storage & persistence)
-- **Frontend**: Next.js 14, React, Tailwind CSS (Vercel deployment)
-- **Production Infrastructure**: AWS EC2 (Ubuntu), Systemd, Nginx, Gunicorn
-
-## 🚀 Live Demo
-
-- **Frontend Application**: [https://multi-agent-research-system-bwnyl3w8j.vercel.app](https://multi-agent-research-system-bwnyl3w8j.vercel.app)
-- **API Endpoint**: `http://65.1.3.210/health`
-
-*(Note: API is rate-limited and secured via CORS to the frontend domain).*
+**Live Demo**: [https://multi-agent-research-system-bwnyl3w8j.vercel.app](https://multi-agent-research-system-bwnyl3w8j.vercel.app)
 
 ---
 
-## 💻 Local Development Setup
+## How It Works
 
-### 1. Prerequisites
-- Python 3.12+
-- Node.js 18+
-- Git
+When a user submits a topic, the system orchestrates four specialized agents to complete the research:
 
-### 2. Clone the Repository
+1. **Researcher**: Queries the web for current, relevant data using the Tavily search API.
+2. **Compressor**: Extracts only the most valuable context from the raw search results to maintain focus and speed.
+3. **Analyst & Writer**: Synthesizes the compressed data into a coherent narrative, formatting it into a professional report.
+4. **Fact-Checker**: Cross-references the final draft against the original raw data, calculating a confidence score and citing verifiable claims.
+
+The system uses memory to retain context across user sessions, allowing for follow-up questions without restarting the research from scratch.
+
+## Technology Stack
+
+**Frontend**
+* Next.js 14 (React)
+* Tailwind CSS
+* Hosted on Vercel
+
+**Backend**
+* FastAPI (Python)
+* LangGraph & LangChain (Agent routing)
+* LLaMA-3 70B via Groq (Inference)
+* Mem0 (Session memory)
+* SQLite (Job tracking)
+* Hosted on AWS EC2 (Nginx + Systemd + Gunicorn)
+
+---
+
+## Local Development Setup
+
+### 1. Backend
+
+Requires Python 3.12+.
+
 ```bash
+# Clone repository
 git clone https://github.com/SarvagyaGupta-19/Multi-agent-research-system.git
 cd Multi-agent-research-system
-```
 
-### 3. Backend Setup
-Create a virtual environment and install dependencies:
-```bash
+# Create virtual environment and install dependencies
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-Set up your environment variables:
-```bash
+# Configure environment variables
 cp .env.example .env
-```
-Edit `.env` to include your API keys:
-```env
-GROQ_API_KEY=your_groq_key
-TAVILY_API_KEY=your_tavily_key
-MEM0_API_KEY=your_mem0_key
-```
+# Edit .env to add your GROQ_API_KEY, TAVILY_API_KEY, and MEM0_API_KEY
 
-Run the backend server:
-```bash
+# Start the API server
 uvicorn api.main:app --reload --port 8000
 ```
 
-### 4. Frontend Setup
-In a new terminal window, navigate to the frontend directory:
-```bash
-cd frontend
-npm install
-```
+### 2. Frontend
 
-Start the Next.js development server:
+Requires Node.js 18+.
+
 ```bash
+# In a new terminal, navigate to the frontend directory
+cd frontend
+
+# Install dependencies and start the development server
+npm install
 npm run dev
 ```
-Access the application at `http://localhost:3000`.
+
+The application will be available at `http://localhost:3000`.
 
 ---
 
-## 🧪 Testing
+## Testing
 
-The backend is fully covered by Pytest (150+ tests ensuring reliability).
+The backend includes a comprehensive test suite covering all agents, routing, and database interactions.
 
 ```bash
-# Run tests
+# Run all tests
 pytest
-
-# Run tests with detailed output
-pytest -v
 ```
 
-## 🚢 Production Deployment
+## Deployment
 
-For instructions on deploying the backend to AWS EC2 and the frontend to Vercel, please refer to the detailed [Deployment Guide](deploy/README.md).
+To deploy this system to production, see the [Deployment Guide](deploy/README.md).
 
-## 🛡️ Security & Performance
+## License
 
-- **Thread-safe Database**: SQLite operations are wrapped in safe connection contexts to prevent memory leaks and locks.
-- **CORS Protection**: The API strictly enforces allowed origins based on environment settings.
-- **DDoS Mitigation**: Nginx is configured with strict rate limiting (10 req/sec) and burst controls.
-- **Non-root Execution**: Systemd enforces that the application runs safely isolated from root access.
-
-## 📄 License
-
-This project is open-source and available under the MIT License.
+MIT License
