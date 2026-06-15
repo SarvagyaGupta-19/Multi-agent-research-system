@@ -143,7 +143,10 @@ def _run_research_worker(
         logger.info("Worker: completed job %s", job_id)
 
     except Exception as e:
-        error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        if "Rate Limit Exceeded" in str(e):
+            error_msg = str(e)
+        else:
+            error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
         store.update_error(job_id, error_msg)
         logger.error("Worker: job %s failed: %s", job_id, error_msg)
 
