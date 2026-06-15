@@ -190,8 +190,8 @@ class TestCallLlm:
         assert mock_client.chat.completions.create.call_count == 1
 
     @patch("agents.llm_client.Groq")
-    def test_bad_request_no_retry(self, mock_groq_cls):
-        """BadRequestError should NOT be retried."""
+    def test_bad_request_raises_exception(self, mock_groq_cls):
+        """BadRequestError should raise an exception and halt the pipeline."""
         from groq import BadRequestError
 
         mock_client = MagicMock()
@@ -203,15 +203,15 @@ class TestCallLlm:
         mock_http_response.text = "bad request"
 
         bad_req_error = BadRequestError(
-            message="Bad request",
+            message="Model decommissioned",
             response=mock_http_response,
-            body=None,
+            body={"error": {"message": "Model decommissioned"}},
         )
         mock_client.chat.completions.create.side_effect = bad_req_error
 
-        result = call_llm(prompt="test", settings=_make_settings())
+        with pytest.raises(Exception, match="Bad Request: Model decommissioned"):
+            call_llm(prompt="test", settings=_make_settings())
 
-        assert result == ""
         assert mock_client.chat.completions.create.call_count == 1
 
     @patch("agents.llm_client.Groq")

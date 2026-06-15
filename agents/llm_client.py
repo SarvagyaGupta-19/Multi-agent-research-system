@@ -114,6 +114,14 @@ def call_llm(
                 "LLM client: non-retryable error (%s): %s",
                 type(e).__name__, e,
             )
+            if isinstance(e, BadRequestError):
+                error_message = str(e)
+                try:
+                    if hasattr(e, 'body') and isinstance(e.body, dict):
+                        error_message = e.body.get('error', {}).get('message', error_message)
+                except Exception:
+                    pass
+                raise Exception(f"Bad Request: {error_message}")
             return ""
 
         except _RETRYABLE_ERRORS as e:

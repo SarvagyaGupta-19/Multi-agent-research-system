@@ -200,7 +200,7 @@ export default function Home() {
                           className="bg-slate-800/50 text-slate-300 border border-slate-700 hover:bg-slate-700 px-4 py-2.5 rounded-md text-sm font-medium transition-colors outline-none cursor-pointer h-[38px]"
                         >
                           <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-                          <option value="llama3-8b-8192">Llama 3 8B (Fast)</option>
+                          <option value="llama-3.1-8b-instant">Llama 3.1 8B (Fast)</option>
                         </select>
                       </div>
                     </div>
