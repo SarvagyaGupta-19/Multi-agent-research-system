@@ -92,11 +92,17 @@ def read_memory(
         if client is None:
             return ""
 
-        results = client.search(
+        results_dict = client.search(
             query=topic,
-            user_id=session_id,
+            filters={"user_id": session_id},
             limit=5,
         )
+
+        # Handle both old (list) and new (dict with 'results' key) Mem0 SDK responses
+        if isinstance(results_dict, dict) and "results" in results_dict:
+            results = results_dict["results"]
+        else:
+            results = results_dict
 
         if not results:
             logger.debug("Memory: no relevant memories found for session=%s", session_id)
