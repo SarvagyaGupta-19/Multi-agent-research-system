@@ -1,0 +1,42 @@
+# /etc/systemd/system/research-api.service
+# Systemd unit for the Multi-Agent Research System backend.
+#
+# Ensures the FastAPI backend:
+# - Starts on boot
+# - Restarts automatically on crash (max 5 restarts in 60s)
+# - Runs as the 'ubuntu' user (non-root)
+# - Logs to journalctl
+
+[Unit]
+Description=Multi-Agent Research System — FastAPI Backend
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/multi-agent-research
+EnvironmentFile=/home/ubuntu/multi-agent-research/.env
+
+ExecStart=/home/ubuntu/multi-agent-research/.venv/bin/uvicorn \
+    api.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --log-level info
+
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/multi-agent-research/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

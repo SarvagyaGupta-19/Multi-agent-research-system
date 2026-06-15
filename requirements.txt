@@ -22,3 +22,6 @@ mem0ai>=2.0.0,<3.0
 
 # Testing
 pytest>=8.0,<9.0
+
+# Production process manager
+gunicorn>=22.0,<24.0
