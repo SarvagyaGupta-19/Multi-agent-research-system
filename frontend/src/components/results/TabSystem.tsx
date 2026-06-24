@@ -11,11 +11,9 @@ interface TabSystemProps {
   claims: any[];
   analysis: string;
   sources: any[];
-  rawData: string;
-  errors: string[];
 }
 
-export function TabSystem({ claims, analysis, sources, rawData, errors }: TabSystemProps) {
+export function TabSystem({ claims, analysis, sources }: TabSystemProps) {
   const [activeTab, setActiveTab] = useState<TabId>("fact_check");
 
   const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
