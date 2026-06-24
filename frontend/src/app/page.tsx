@@ -16,6 +16,7 @@ type AppState = "INPUT" | "PROCESSING" | "RESULTS" | "ERROR";
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("INPUT");
+  const [isInitializing, setIsInitializing] = useState(true);
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState("blog");
   const [model, setModel] = useState("llama-3.3-70b-versatile");
@@ -23,6 +24,14 @@ export default function Home() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<JobStatusResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Initial Loading Splash Screen
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializing(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
   
   const [stageIndex, setStageIndex] = useState(0);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -119,8 +128,45 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen w-full font-sans overflow-hidden">
+    <div className="min-h-screen bg-[#fcfbf9] graph-paper-bg flex flex-col relative overflow-hidden font-sans">
       
+      {/* Splash Screen Overlay */}
+      <AnimatePresence>
+        {isInitializing && (
+          <motion.div
+            key="splash"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
+            className="absolute inset-0 z-50 bg-[#fcfbf9] graph-paper-bg flex flex-col items-center justify-center overflow-hidden"
+          >
+            {/* Background background floating faces for splash */}
+            <img src="/face_0_0.png" className="absolute top-[20%] left-[20%] w-20 opacity-30 mix-blend-multiply rotate-[-15deg] animate-pulse" alt="" />
+            <img src="/face_3_2.png" className="absolute bottom-[20%] right-[20%] w-24 opacity-30 mix-blend-multiply rotate-12 animate-float" alt="" />
+            <img src="/face_2_2.png" className="absolute top-[30%] right-[25%] w-16 opacity-30 mix-blend-multiply rotate-[25deg] animate-bounce" alt="" />
+
+            <motion.div
+              initial={{ scale: 0.5, rotate: -20, opacity: 0 }}
+              animate={{ scale: 1, rotate: [0, 10, -10, 0], opacity: 1 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="w-32 h-32 mb-8 bg-white rounded-full border-4 border-gray-900 shadow-[6px_6px_0px_0px_rgba(26,26,26,1)] flex items-center justify-center relative z-10"
+            >
+              <img src="/face_1_1.png" className="w-[120%] h-[120%] object-contain mix-blend-multiply" alt="loading face" />
+            </motion.div>
+            
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="text-4xl md:text-5xl font-heading font-bold text-gray-900 z-10 flex flex-col items-center"
+            >
+              <span>Getting</span>
+              <span className="highlight-pink mt-2 px-2 inline-block">creative...</span>
+            </motion.h1>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Playful Nav Bar */}
       <nav className="w-full px-8 py-6 flex items-center justify-between z-50">
         <div className="flex items-center space-x-2">
