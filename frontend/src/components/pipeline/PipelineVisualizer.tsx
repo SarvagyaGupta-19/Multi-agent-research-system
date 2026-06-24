@@ -24,11 +24,11 @@ export function PipelineVisualizer({ currentStageIndex, hasError = false }: Pipe
     <div className="w-full max-w-4xl mx-auto p-8">
       <div className="relative flex justify-between items-center w-full">
         {/* Background connecting line */}
-        <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-800 -translate-y-1/2 z-0 rounded" />
+        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 z-0 rounded" />
         
         {/* Active connecting line */}
         <motion.div 
-          className="absolute top-1/2 left-0 h-1 bg-cyan-400 -translate-y-1/2 z-0 rounded shadow-[0_0_10px_rgba(34,211,238,0.8)]"
+          className="absolute top-1/2 left-0 h-1 bg-gray-900 -translate-y-1/2 z-0 rounded"
           initial={{ width: "0%" }}
           animate={{ width: `${(Math.min(currentStageIndex, STAGES.length - 1) / (STAGES.length - 1)) * 100}%` }}
           transition={{ duration: 0.5 }}
@@ -39,23 +39,23 @@ export function PipelineVisualizer({ currentStageIndex, hasError = false }: Pipe
           const isComplete = index < currentStageIndex;
           const isErrorNode = isActive && hasError;
 
-          let iconColor = "text-slate-500";
-          let bgColor = "bg-slate-900/80";
-          let borderColor = "border-slate-700";
+          let iconColor = "text-gray-500";
+          let bgColor = "bg-white";
+          let borderColor = "border-gray-200";
 
           if (isComplete) {
-            iconColor = "text-white";
-            bgColor = "bg-blue-600";
-            borderColor = "border-blue-500";
+            iconColor = "text-gray-900";
+            bgColor = "bg-[#b9ff66]";
+            borderColor = "border-gray-900";
           } else if (isActive) {
             if (isErrorNode) {
               iconColor = "text-white";
-              bgColor = "bg-red-600";
+              bgColor = "bg-red-500";
               borderColor = "border-red-500";
             } else {
-              iconColor = "text-blue-400";
-              bgColor = "bg-slate-800";
-              borderColor = "border-blue-500";
+              iconColor = "text-gray-900";
+              bgColor = "bg-[#ff90e8]";
+              borderColor = "border-gray-900";
             }
           }
 
@@ -64,13 +64,13 @@ export function PipelineVisualizer({ currentStageIndex, hasError = false }: Pipe
           return (
             <div key={stage.id} className="relative z-10 flex flex-col items-center">
               <motion.div 
-                className={`w-12 h-12 rounded-full border flex items-center justify-center ${bgColor} ${borderColor} transition-colors duration-300 shadow-lg`}
-                animate={isActive && !isErrorNode ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${bgColor} ${borderColor} transition-colors duration-300 ${isActive || isComplete ? 'shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]' : ''}`}
+                animate={isActive && !isErrorNode ? { scale: [1, 1.1, 1], rotate: [0, -5, 5, 0] } : { scale: 1 }}
                 transition={isActive ? { repeat: Infinity, duration: 2 } : {}}
               >
                 {isErrorNode ? <AlertCircle className="w-5 h-5 text-white" /> : <Icon className={`w-5 h-5 ${iconColor}`} />}
               </motion.div>
-              <div className={`mt-3 text-xs font-semibold uppercase tracking-wider absolute -bottom-8 whitespace-nowrap ${isActive ? (isErrorNode ? "text-red-400" : "text-blue-400") : isComplete ? "text-slate-300" : "text-slate-600"}`}>
+              <div className={`mt-3 text-[10px] sm:text-xs font-bold uppercase tracking-widest absolute -bottom-10 text-center w-24 leading-tight ${isActive ? (isErrorNode ? "text-red-500" : "text-[#ff90e8]") : isComplete ? "text-gray-900" : "text-gray-400"}`}>
                 {stage.label}
               </div>
             </div>

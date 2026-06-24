@@ -83,7 +83,7 @@ export function TrustScoreGauge({ score, verified, total }: TrustScoreGaugeProps
       </div>
       <div className="mt-4 text-center">
         <div className={`text-lg font-semibold ${colorClass}`}>{label}</div>
-        <div className="text-sm text-slate-400 mt-1">{verified} of {total} claims verified</div>
+        <div className="text-sm text-gray-500 mt-1">{verified} of {total} claims verified</div>
       </div>
     </div>
   );

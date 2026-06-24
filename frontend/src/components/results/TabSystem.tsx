@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { GlassCard } from "../ui/GlassCard";
+import { ScrapbookCard } from "../ui/ScrapbookCard";
 import { CheckCircle, XCircle, HelpCircle, Link as LinkIcon, FileText, AlertCircle, Server } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
-type TabId = "fact_check" | "analysis" | "sources" | "raw_data" | "log";
+type TabId = "fact_check" | "analysis" | "sources";
 
 interface TabSystemProps {
   claims: any[];
@@ -22,8 +22,6 @@ export function TabSystem({ claims, analysis, sources, rawData, errors }: TabSys
     { id: "fact_check", label: "Fact-Check Results", icon: CheckCircle },
     { id: "analysis", label: "Analysis", icon: BarChartIcon },
     { id: "sources", label: "Sources", icon: LinkIcon },
-    { id: "raw_data", label: "Raw Data", icon: FileText },
-    { id: "log", label: "Pipeline Log", icon: Server },
   ];
 
   return (
@@ -38,8 +36,8 @@ export function TabSystem({ claims, analysis, sources, rawData, errors }: TabSys
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center space-x-2 px-4 py-2 rounded-t-lg transition-colors whitespace-nowrap ${
                 isActive 
-                  ? "bg-slate-800/80 text-cyan-400 border-b-2 border-cyan-400" 
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                  ? "bg-gray-900 text-white shadow-md border-b-2 border-gray-900"
+                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -53,15 +51,13 @@ export function TabSystem({ claims, analysis, sources, rawData, errors }: TabSys
         {activeTab === "fact_check" && <FactCheckTab claims={claims} />}
         {activeTab === "analysis" && <AnalysisTab analysis={analysis} />}
         {activeTab === "sources" && <SourcesTab sources={sources} />}
-        {activeTab === "raw_data" && <RawDataTab data={rawData} />}
-        {activeTab === "log" && <PipelineLogTab errors={errors} />}
       </div>
     </div>
   );
 }
 
 function FactCheckTab({ claims }: { claims: any[] }) {
-  if (!claims || claims.length === 0) return <div className="text-slate-500 font-mono text-sm">No claims extracted.</div>;
+  if (!claims || claims.length === 0) return <div className="text-gray-500 font-mono text-sm">No claims extracted.</div>;
 
   // Sort: Unverified -> Uncertain -> Verified
   const sortedClaims = [...claims].sort((a, b) => {
@@ -87,23 +83,23 @@ function FactCheckTab({ claims }: { claims: any[] }) {
         }
 
         return (
-          <GlassCard key={idx} className={`border-l-4 ${borderClass} p-4`}>
-            <div className="flex items-start space-x-3">
+          <ScrapbookCard key={idx} className={`border-l-8 ${borderClass} p-4`}>
+            <div className="flex space-x-3">
               {icon}
               <div className="flex-1">
-                <p className="text-slate-200 font-medium">{claim.claim}</p>
-                <p className="text-slate-400 text-sm mt-2">{claim.rationale}</p>
+                <p className="text-gray-800 font-medium">{claim.claim}</p>
+                <p className="text-gray-600 text-sm mt-2">{claim.rationale}</p>
                 {claim.source && claim.source !== "No source" && (
                   <div className="mt-3 flex items-center space-x-2 text-xs font-mono">
-                    <LinkIcon className="w-3 h-3 text-cyan-500" />
-                    <a href={claim.source} target="_blank" rel="noreferrer" className="text-cyan-500 hover:underline truncate max-w-md">
+                    <LinkIcon className="w-3 h-3 text-cyan-600" />
+                    <a href={claim.source} target="_blank" rel="noreferrer" className="text-cyan-600 hover:underline truncate max-w-md">
                       {claim.source}
                     </a>
                   </div>
                 )}
               </div>
             </div>
-          </GlassCard>
+          </ScrapbookCard>
         );
       })}
     </div>
@@ -111,71 +107,35 @@ function FactCheckTab({ claims }: { claims: any[] }) {
 }
 
 function AnalysisTab({ analysis }: { analysis: string }) {
-  if (!analysis) return <div className="text-slate-500 font-mono text-sm">No analysis available.</div>;
+  if (!analysis) return <div className="text-gray-500 font-mono text-sm">No analysis available.</div>;
   return (
-    <GlassCard className="p-6 prose prose-invert prose-cyan max-w-none">
-      <ReactMarkdown>{analysis}</ReactMarkdown>
-    </GlassCard>
+    <ScrapbookCard className="p-6 prose max-w-none">
+      <div className="text-gray-800">{analysis}</div>
+    </ScrapbookCard>
   );
 }
 
 function SourcesTab({ sources }: { sources: any[] }) {
-  if (!sources || sources.length === 0) return <div className="text-slate-500 font-mono text-sm">No sources available.</div>;
+  if (!sources || sources.length === 0) return <div className="text-gray-500 font-mono text-sm">No sources available.</div>;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {sources.map((source, idx) => (
-        <GlassCard key={idx} className="p-4 flex flex-col">
-          <div className="flex items-start space-x-2 mb-2">
-            <LinkIcon className="w-4 h-4 text-cyan-500 mt-1 shrink-0" />
-            <a href={source.url} target="_blank" rel="noreferrer" className="text-cyan-400 font-medium hover:underline line-clamp-2">
+        <ScrapbookCard key={idx} className="p-4 flex flex-col">
+          <div className="flex space-x-2 mb-2">
+            <LinkIcon className="w-4 h-4 text-cyan-600 mt-1 shrink-0" />
+            <a href={source.url} target="_blank" rel="noreferrer" className="text-cyan-600 font-medium hover:underline line-clamp-2">
               {source.title}
             </a>
           </div>
-          <p className="text-slate-400 text-sm flex-1 line-clamp-3">{source.snippet}</p>
-          <div className="mt-3 text-xs text-slate-600 font-mono truncate">{source.url}</div>
-        </GlassCard>
+          <p className="text-gray-600 text-sm flex-1 line-clamp-3">{source.snippet}</p>
+          <div className="mt-3 text-xs text-gray-400 font-mono truncate">{source.url}</div>
+        </ScrapbookCard>
       ))}
     </div>
   );
 }
 
-function RawDataTab({ data }: { data: string }) {
-  return (
-    <GlassCard className="p-0 overflow-hidden flex flex-col h-[600px]">
-      <div className="bg-slate-900/80 p-2 border-b border-slate-800 text-xs font-mono text-slate-500 flex justify-between">
-        <span>RAW_RESEARCH_DUMP.TXT</span>
-        <span>{data.length} bytes</span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4">
-        <pre className="text-xs font-mono text-slate-400 whitespace-pre-wrap break-words">
-          {data || "No raw data."}
-        </pre>
-      </div>
-    </GlassCard>
-  );
-}
 
-function PipelineLogTab({ errors }: { errors: string[] }) {
-  if (!errors || errors.length === 0) {
-    return (
-      <GlassCard className="p-6 flex flex-col items-center justify-center text-center space-y-4 h-40">
-        <CheckCircle className="w-8 h-8 text-emerald-500/50" />
-        <div className="font-mono text-emerald-500/80 text-sm">PIPELINE_COMPLETE_NO_ISSUES</div>
-      </GlassCard>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {errors.map((err, idx) => (
-        <div key={idx} className="bg-slate-900/50 border border-amber-900/30 p-3 rounded text-sm font-mono text-amber-200/80 flex items-start space-x-2">
-          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-          <span>{err}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // Helper icon
 function BarChartIcon(props: any) {
