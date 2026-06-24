@@ -4,9 +4,9 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        // Proxy all requests starting with /api/proxy to the actual backend
+        // Proxy all requests starting with /api/proxy to the EC2 backend
         source: "/api/proxy/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/:path*`,
+        destination: "http://15.207.114.224:8000/:path*",
       },
     ];
   },
