@@ -84,16 +84,41 @@ class TestCompressResearch:
 
         assert result["compressed_research"] == "Short research text"
 
-    def test_over_limit_truncated(self):
-        """Research over limit should be truncated."""
+    def test_over_limit_truncated_no_source_headers(self):
+        """Research over limit with no source headers falls back to middle truncation."""
         state = create_initial_state("test")
-        state["raw_research"] = "A" * 20000
+        state["raw_research"] = "A" * 20000  # No source headers
         settings = _make_settings(MAX_CONTEXT_CHARS=1000)
 
         result = compress_research(state, settings=settings)
 
+        # Should be truncated (middle strategy produces output <= max_chars)
+        assert len(result["compressed_research"]) <= 1000 + 50  # small slack for ellipsis marker
         assert len(result["compressed_research"]) < len(state["raw_research"])
-        assert "[... truncated ...]" in result["compressed_research"]
+
+    def test_over_limit_with_source_headers_fair_distribution(self):
+        """BP-08: Multiple sources should each be represented in compressed output."""
+        state = create_initial_state("test")
+        # Create 3 sources, each 5000 chars, total 15000
+        raw = (
+            "--- Source: http://source1.com\n" + "A" * 5000 + "\n"
+            "--- Source: http://source2.com\n" + "B" * 5000 + "\n"
+            "--- Source: http://source3.com\n" + "C" * 5000 + "\n"
+        )
+        settings = _make_settings(MAX_CONTEXT_CHARS=3000)  # budget=1000/source
+        state["raw_research"] = raw
+
+        result = compress_research(state, settings=settings)
+
+        compressed = result["compressed_research"]
+        # All 3 sources should be represented
+        assert "source1.com" in compressed, "Source 1 missing from compressed output"
+        assert "source2.com" in compressed, "Source 2 missing from compressed output"
+        assert "source3.com" in compressed, "Source 3 missing from compressed output"
+        # At least one source should have been truncated
+        assert "[... source truncated ...]" in compressed
+        # Total should be within limit (with small slack for markers)
+        assert len(compressed) <= 3000 + 200
 
     def test_empty_research_stays_empty(self):
         """Empty raw_research should produce empty compressed_research."""

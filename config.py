@@ -35,7 +35,7 @@ class Settings:
     MEM0_API_KEY: str = ""
 
     # Groq LLM settings
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
     GROQ_TIMEOUT: int = 30
     GROQ_MAX_RETRIES: int = 3
 
@@ -143,7 +143,7 @@ def load_settings(env_path: str | None = None) -> Settings:
         GROQ_API_KEY=groq_key,
         TAVILY_API_KEY=tavily_key,
         MEM0_API_KEY=os.getenv("MEM0_API_KEY", ""),
-        GROQ_MODEL=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        GROQ_MODEL=os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
         GROQ_TIMEOUT=_parse_int(os.getenv("GROQ_TIMEOUT", ""), "GROQ_TIMEOUT", 30),
         GROQ_MAX_RETRIES=_parse_int(os.getenv("GROQ_MAX_RETRIES", ""), "GROQ_MAX_RETRIES", 3),
         TAVILY_MAX_RESULTS=_parse_int(os.getenv("TAVILY_MAX_RESULTS", ""), "TAVILY_MAX_RESULTS", 5),

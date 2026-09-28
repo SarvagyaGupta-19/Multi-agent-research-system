@@ -1,5 +1,7 @@
-// Use the Next.js rewrite proxy to avoid browser Mixed Content errors (HTTPS -> HTTP)
-const API_BASE_URL = "/api/proxy";
+// BP-15: Use env var so the deployed Vercel frontend can point to the real backend.
+// In local dev: falls back to the Next.js rewrite proxy at /api/proxy.
+// In production (Vercel): set NEXT_PUBLIC_API_URL=https://your-backend.com in Vercel dashboard.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/proxy";
 
 export interface ResearchRequest {
   topic: string;
@@ -54,4 +56,13 @@ export async function pollJobStatus(jobId: string): Promise<JobStatusResponse> {
   }
 
   return response.json();
+}
+
+// BP-02: Cancel a running job on the server (not just the UI polling)
+export async function cancelResearchJob(jobId: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/research/${jobId}`, { method: "DELETE" });
+  } catch {
+    // Non-fatal: if cancel fails, server job may still complete but UI is reset
+  }
 }

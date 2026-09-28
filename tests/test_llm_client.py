@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 
 from agents.llm_client import call_llm
+import agents.llm_client as llm_module  # BP-06: needed to clear _client_cache between tests
 from config import Settings
 
 
@@ -33,11 +34,15 @@ def _make_mock_response(content: str) -> MagicMock:
 class TestCallLlm:
     """Tests for the call_llm function."""
 
-    @patch("agents.llm_client.Groq")
-    def test_successful_call(self, mock_groq_cls):
+    def setup_method(self):
+        """BP-06: Clear the Groq client cache before each test so mocks don't bleed."""
+        llm_module._client_cache.clear()
+
+    @patch("agents.llm_client._get_groq_client")
+    def test_successful_call(self, mock_get_client):
         """Successful LLM call should return the content string."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value = _make_mock_response(
             "This is the analysis result."
         )
@@ -51,11 +56,11 @@ class TestCallLlm:
         assert result == "This is the analysis result."
         mock_client.chat.completions.create.assert_called_once()
 
-    @patch("agents.llm_client.Groq")
-    def test_system_prompt_included(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_system_prompt_included(self, mock_get_client):
         """System prompt should be passed as the first message."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value = _make_mock_response("ok")
 
         call_llm(
@@ -71,11 +76,11 @@ class TestCallLlm:
         assert messages[1]["role"] == "user"
         assert messages[1]["content"] == "test prompt"
 
-    @patch("agents.llm_client.Groq")
-    def test_no_system_prompt(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_no_system_prompt(self, mock_get_client):
         """Without system prompt, only user message should be sent."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value = _make_mock_response("ok")
 
         call_llm(prompt="test prompt", settings=_make_settings())
@@ -95,11 +100,11 @@ class TestCallLlm:
         result = call_llm(prompt="   ", settings=_make_settings())
         assert result == ""
 
-    @patch("agents.llm_client.Groq")
-    def test_empty_response_returns_empty(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_empty_response_returns_empty(self, mock_get_client):
         """Empty model response should return empty string."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_response = MagicMock()
         mock_response.choices = []
         mock_client.chat.completions.create.return_value = mock_response
@@ -108,13 +113,13 @@ class TestCallLlm:
         assert result == ""
 
     @patch("agents.llm_client.time.sleep")  # skip actual sleeping
-    @patch("agents.llm_client.Groq")
-    def test_retry_on_rate_limit(self, mock_groq_cls, mock_sleep):
+    @patch("agents.llm_client._get_groq_client")
+    def test_retry_on_rate_limit(self, mock_get_client, mock_sleep):
         """Should retry on RateLimitError and succeed."""
         from groq import RateLimitError
 
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         # Create a proper mock response for RateLimitError
         mock_http_response = MagicMock()
@@ -143,13 +148,13 @@ class TestCallLlm:
         assert mock_sleep.call_count == 2
 
     @patch("agents.llm_client.time.sleep")
-    @patch("agents.llm_client.Groq")
-    def test_max_retries_exhausted(self, mock_groq_cls, mock_sleep):
+    @patch("agents.llm_client._get_groq_client")
+    def test_max_retries_exhausted(self, mock_get_client, mock_sleep):
         """Should return empty string when all retries are exhausted."""
         from groq import APIConnectionError
 
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         conn_error = APIConnectionError(request=MagicMock())
 
@@ -163,13 +168,13 @@ class TestCallLlm:
         # 1 initial + 1 retry = 2 calls
         assert mock_client.chat.completions.create.call_count == 2
 
-    @patch("agents.llm_client.Groq")
-    def test_auth_error_no_retry(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_auth_error_no_retry(self, mock_get_client):
         """AuthenticationError should NOT be retried."""
         from groq import AuthenticationError
 
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         mock_http_response = MagicMock()
         mock_http_response.status_code = 401
@@ -189,13 +194,13 @@ class TestCallLlm:
         # Should only be called once (no retry)
         assert mock_client.chat.completions.create.call_count == 1
 
-    @patch("agents.llm_client.Groq")
-    def test_bad_request_raises_exception(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_bad_request_raises_exception(self, mock_get_client):
         """BadRequestError should raise an exception and halt the pipeline."""
         from groq import BadRequestError
 
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         mock_http_response = MagicMock()
         mock_http_response.status_code = 400
@@ -214,11 +219,11 @@ class TestCallLlm:
 
         assert mock_client.chat.completions.create.call_count == 1
 
-    @patch("agents.llm_client.Groq")
-    def test_unexpected_error_no_retry(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_unexpected_error_no_retry(self, mock_get_client):
         """Unexpected errors should not be retried."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.side_effect = RuntimeError("unexpected")
 
         result = call_llm(prompt="test", settings=_make_settings())
@@ -227,13 +232,13 @@ class TestCallLlm:
         assert mock_client.chat.completions.create.call_count == 1
 
     @patch("agents.llm_client.time.sleep")
-    @patch("agents.llm_client.Groq")
-    def test_exponential_backoff(self, mock_groq_cls, mock_sleep):
+    @patch("agents.llm_client._get_groq_client")
+    def test_exponential_backoff(self, mock_get_client, mock_sleep):
         """Backoff should be exponential: 1s, 2s, 4s..."""
         from groq import APIConnectionError
 
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.side_effect = APIConnectionError(
             request=MagicMock()
         )
@@ -247,11 +252,11 @@ class TestCallLlm:
         mock_sleep.assert_any_call(2)
         mock_sleep.assert_any_call(4)
 
-    @patch("agents.llm_client.Groq")
-    def test_temperature_passed(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_temperature_passed(self, mock_get_client):
         """Custom temperature should be passed to the API."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value = _make_mock_response("ok")
 
         call_llm(prompt="test", temperature=0.7, settings=_make_settings())
@@ -259,11 +264,11 @@ class TestCallLlm:
         call_args = mock_client.chat.completions.create.call_args
         assert call_args.kwargs["temperature"] == 0.7
 
-    @patch("agents.llm_client.Groq")
-    def test_model_from_settings(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_model_from_settings(self, mock_get_client):
         """Model name should come from settings."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value = _make_mock_response("ok")
 
         settings = _make_settings(GROQ_MODEL="mixtral-8x7b-32768")
@@ -272,11 +277,11 @@ class TestCallLlm:
         call_args = mock_client.chat.completions.create.call_args
         assert call_args.kwargs["model"] == "mixtral-8x7b-32768"
 
-    @patch("agents.llm_client.Groq")
-    def test_model_override(self, mock_groq_cls):
+    @patch("agents.llm_client._get_groq_client")
+    def test_model_override(self, mock_get_client):
         """Model override should take precedence over settings."""
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value = _make_mock_response("ok")
 
         settings = _make_settings(GROQ_MODEL="mixtral-8x7b-32768")
@@ -286,13 +291,13 @@ class TestCallLlm:
         assert call_args.kwargs["model"] == "llama3-8b-8192"
 
     @patch("agents.llm_client.time.sleep")
-    @patch("agents.llm_client.Groq")
-    def test_rate_limit_exhausted_raises_exception(self, mock_groq_cls, mock_sleep):
+    @patch("agents.llm_client._get_groq_client")
+    def test_rate_limit_exhausted_raises_exception(self, mock_get_client, mock_sleep):
         """RateLimitError exhaustion should raise Exception."""
         from groq import RateLimitError
 
         mock_client = MagicMock()
-        mock_groq_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         mock_http_response = MagicMock()
         mock_http_response.status_code = 429

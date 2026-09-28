@@ -32,6 +32,18 @@ _RETRYABLE_ERRORS = (RateLimitError, APIConnectionError, InternalServerError)
 # Errors that should NOT be retried (permanent failures)
 _NON_RETRYABLE_ERRORS = (AuthenticationError, BadRequestError)
 
+# BP-06: Cache Groq clients to reuse HTTP connection pools across calls.
+_client_cache: dict[tuple[str, int], Groq] = {}
+
+
+def _get_groq_client(api_key: str, timeout: int) -> Groq:
+    """Return a cached Groq client, creating one on first use per (key, timeout) pair."""
+    cache_key = (api_key, timeout)
+    if cache_key not in _client_cache:
+        _client_cache[cache_key] = Groq(api_key=api_key, timeout=timeout)
+        logger.debug("LLM client: created new Groq client (timeout=%ds)", timeout)
+    return _client_cache[cache_key]
+
 
 def call_llm(
     prompt: str,
@@ -40,6 +52,7 @@ def call_llm(
     settings: "Settings | None" = None,
     json_mode: bool = False,
     model_override: str | None = None,
+    max_tokens: int = 900,
 ) -> str:
     """Call the Groq LLM with retry logic and error handling.
 
@@ -69,10 +82,7 @@ def call_llm(
         logger.warning("LLM client: called with empty prompt, returning empty")
         return ""
 
-    client = Groq(
-        api_key=settings.GROQ_API_KEY,
-        timeout=settings.GROQ_TIMEOUT,
-    )
+    client = _get_groq_client(settings.GROQ_API_KEY, settings.GROQ_TIMEOUT)  # BP-06: cached client
 
     messages = []
     if system_prompt:
@@ -84,6 +94,7 @@ def call_llm(
         "model": model_override if model_override else settings.GROQ_MODEL,
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     if json_mode:
         create_kwargs["response_format"] = {"type": "json_object"}

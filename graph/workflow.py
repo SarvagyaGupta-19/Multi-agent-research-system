@@ -10,6 +10,7 @@ Pipeline:
 """
 
 import logging
+import concurrent.futures  # BP-04: pipeline timeout
 from typing import TYPE_CHECKING
 
 from langgraph.graph import StateGraph, START, END
@@ -28,22 +29,35 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# BP-05: Cache the compiled graph per settings identity to avoid recompiling on every job.
+# The graph is stateless between runs — all state is passed via ResearchState.
+_graph_cache: dict[int, object] = {}
+
+
+def _get_compiled_graph(settings: "Settings") -> object:
+    """Return cached compiled graph, or build and cache if not yet compiled."""
+    cache_key = id(settings)
+    if cache_key not in _graph_cache:
+        logger.info("Workflow: compiling graph (first call for this settings instance)")
+        _graph_cache[cache_key] = build_graph(settings=settings)
+    return _graph_cache[cache_key]
+
 
 # --- Node factory functions ---
 
 def _make_memory_read_node(settings: "Settings"):
     """Create a memory read node that loads prior context before research."""
-    def node(state: ResearchState) -> ResearchState:
+    def node(state: ResearchState) -> dict:  # BP-10: return partial update dict, not full state
         logger.info("Workflow: entering memory_read node")
 
         if state.get("skip_memory", False):
             logger.info("Workflow: skip_memory=True, bypassing memory read")
-            return state
+            return {}  # BP-10: empty dict = no changes
 
         session_id = state.get("session_id", "")
         if not session_id:
             logger.debug("Workflow: no session_id, skipping memory read")
-            return state
+            return {}
 
         topic = state.get("topic", "")
         context = read_memory(
@@ -53,15 +67,14 @@ def _make_memory_read_node(settings: "Settings"):
         )
 
         if context:
-            state["memory_context"] = context
             logger.info(
                 "Workflow: loaded %d chars of memory context for session=%s",
                 len(context), session_id,
             )
+            return {"memory_context": context}  # BP-10: return partial update
         else:
             logger.debug("Workflow: no memory context found")
-
-        return state
+            return {}
     return node
 
 
@@ -107,23 +120,23 @@ def _make_fact_checker_node(settings: "Settings"):
 
 def _make_memory_write_node(settings: "Settings"):
     """Create a memory write node that stores research output after completion."""
-    def node(state: ResearchState) -> ResearchState:
+    def node(state: ResearchState) -> dict:  # BP-10: return partial update dict
         logger.info("Workflow: entering memory_write node")
 
         if state.get("skip_memory", False):
             logger.info("Workflow: skip_memory=True, bypassing memory write")
-            return state
+            return {}
 
         session_id = state.get("session_id", "")
         if not session_id:
             logger.debug("Workflow: no session_id, skipping memory write")
-            return state
+            return {}
 
         # Only write if we have meaningful output
         report = state.get("report", "")
         if not report:
             logger.debug("Workflow: no report produced, skipping memory write")
-            return state
+            return {}
 
         summary = build_memory_summary(
             topic=state.get("topic", ""),
@@ -141,10 +154,9 @@ def _make_memory_write_node(settings: "Settings"):
         if success:
             logger.info("Workflow: memory written for session=%s", session_id)
         else:
-            # Non-fatal — just log
             logger.debug("Workflow: memory write skipped or failed (non-fatal)")
 
-        return state
+        return {}  # BP-10: memory_write has no state fields to update
     return node
 
 
@@ -233,9 +245,24 @@ def run_research(
         session_id=session_id,
     )
 
-    # Build and run the graph
-    compiled_graph = build_graph(settings=settings)
-    final_state = compiled_graph.invoke(initial_state)
+    # Build (or reuse cached) compiled graph
+    compiled_graph = _get_compiled_graph(settings)  # BP-05: reuses cached graph
+
+    # BP-04: Run the pipeline in a thread with a job-level timeout.
+    # Worst case without this: 4 agents x 3 retries x 30s = 360s, but nginx
+    # closes the connection at 120s, leaving a zombie thread. With this timeout,
+    # we get a clean TimeoutError that the worker can catch and report.
+    PIPELINE_TIMEOUT_SECS = 300  # 5 minutes absolute max
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pipeline_executor:
+        future = pipeline_executor.submit(compiled_graph.invoke, initial_state)
+        try:
+            final_state = future.result(timeout=PIPELINE_TIMEOUT_SECS)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            raise TimeoutError(
+                f"Research pipeline timed out after {PIPELINE_TIMEOUT_SECS}s. "
+                "Try a simpler topic or check if the LLM API is experiencing delays."
+            )
 
     # Log summary
     num_sources = len(final_state.get("sources", []))

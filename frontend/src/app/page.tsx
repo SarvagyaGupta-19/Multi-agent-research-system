@@ -1,13 +1,25 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+
+// BP-03: Safe parser — never throws, returns 0 on malformed LLM JSON
+function parseTrustScore(raw: string | undefined): number {
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw);
+    const score = parsed?.trust_score;
+    return typeof score === "number" ? score : 0;
+  } catch {
+    return 0;
+  }
+}
 import { motion, AnimatePresence } from "framer-motion";
 import { ScrapbookCard } from "@/components/ui/ScrapbookCard";
 import { PipelineVisualizer } from "@/components/pipeline/PipelineVisualizer";
 import { TrustScoreGauge } from "@/components/results/TrustScoreGauge";
 import { ReportRenderer } from "@/components/results/ReportRenderer";
 import { TabSystem } from "@/components/results/TabSystem";
-import { submitResearchJob, pollJobStatus, JobStatusResponse } from "@/lib/api";
+import { submitResearchJob, pollJobStatus, cancelResearchJob, JobStatusResponse } from "@/lib/api";
 import { Search, AlertTriangle, Download, Copy, ArrowRight, CheckCircle2 } from "lucide-react";
 
 type AppState = "INPUT" | "PROCESSING" | "RESULTS" | "ERROR";
@@ -19,11 +31,20 @@ export default function Home() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState("blog");
-  const [model, setModel] = useState("llama-3.3-70b-versatile");
+  const [model, setModel] = useState("qwen/qwen3.8-27b");
   const [skipMemory, setSkipMemory] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<JobStatusResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  // BP-17: toast state instead of alert()
+  const [toastMsg, setToastMsg] = useState("");
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(""), 2500);
+  }, []);
 
   // Initial Loading Splash Screen
   useEffect(() => {
@@ -36,7 +57,9 @@ export default function Home() {
   const [stageIndex, setStageIndex] = useState(0);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const stageIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollStartTimeRef = useRef<number>(0); // BP-11: track when polling started
   const resultsRef = useRef<HTMLDivElement>(null);
+  const MAX_POLL_MS = 5 * 60 * 1000; // BP-11: 5-minute absolute timeout
 
   useEffect(() => {
     if (appState === "RESULTS" && resultsRef.current) {
@@ -62,12 +85,22 @@ export default function Home() {
       });
 
       setJobId(response.job_id);
+      pollStartTimeRef.current = Date.now(); // BP-11: record poll start time
 
       stageIntervalRef.current = setInterval(() => {
         setStageIndex(prev => (prev < 6 ? prev + 1 : prev));
       }, 8000); 
 
       pollingRef.current = setInterval(async () => {
+        // BP-11: Enforce max poll duration — abandon if server is stuck
+        if (Date.now() - pollStartTimeRef.current > MAX_POLL_MS) {
+          clearInterval(pollingRef.current!);
+          clearInterval(stageIntervalRef.current!);
+          setErrorMsg("Research timed out after 5 minutes. The server may be overloaded — please try again.");
+          setAppState("ERROR");
+          return;
+        }
+
         try {
           const statusRes = await pollJobStatus(response.job_id);
           if (statusRes.status === "complete") {
@@ -97,6 +130,10 @@ export default function Home() {
   };
 
   const reset = () => {
+    // BP-02: Cancel the server-side job before clearing the UI
+    if (jobId) {
+      cancelResearchJob(jobId); // fire-and-forget, non-blocking
+    }
     setAppState("INPUT");
     setTopic("");
     setJobData(null);
@@ -109,7 +146,7 @@ export default function Home() {
   const copyReport = () => {
     if (jobData?.result?.report) {
       navigator.clipboard.writeText(jobData.result.report);
-      alert("Report copied to clipboard!");
+      showToast("Report copied to clipboard! ✓"); // BP-17: no more alert()
     }
   };
 
@@ -274,8 +311,9 @@ export default function Home() {
                       onChange={(e) => setModel(e.target.value)}
                       className="w-full bg-gray-50 text-gray-800 border-2 border-gray-200 hover:border-gray-900 px-4 py-3 rounded-xl text-sm font-bold transition-colors outline-none cursor-pointer appearance-none"
                     >
-                      <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-                      <option value="llama-3.1-8b-instant">Llama 3.1 8B (Fast)</option>
+                      <option value="qwen/qwen3.8-27b">Qwen 3.8 27B</option>
+                      <option value="openai/gpt-oss-20b">GPT OSS 20B</option>
+                      <option value="openai/gpt-oss-120b">GPT OSS 120B</option>
                     </select>
                   </div>
                 </ScrapbookCard>
@@ -429,7 +467,8 @@ export default function Home() {
               {/* STATS ROW */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
                 {[
-                  { label: "Confidence", val: `${Math.round((jobData.result.fact_checked_report ? JSON.parse(jobData.result.fact_checked_report).trust_score : 0) * 100)}%`, color: 'text-[#b9ff66]', bg: 'bg-gray-900', rot: -1 },
+                  // BP-03: use safe helper — JSON.parse directly here would crash the view on malformed LLM output
+                  { label: "Confidence", val: `${Math.round(parseTrustScore(jobData.result.fact_checked_report) * 100)}%`, color: 'text-[#b9ff66]', bg: 'bg-gray-900', rot: -1 },
                   { label: "Sources", val: jobData.result.sources?.length || 0, rot: 1 },
                   { label: "Verified", val: jobData.result.claims?.filter((c:any) => c.status === "verified").length || 0, rot: 0 },
                   { label: "Unverified", val: jobData.result.claims?.filter((c:any) => c.status !== "verified").length || 0, color: 'text-[#ffb84d]', rot: 2 },
@@ -478,6 +517,21 @@ export default function Home() {
 
         </AnimatePresence>
       </main>
+
+      {/* BP-17: Toast notification (replaces alert) */}
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white font-bold px-6 py-3 rounded-full shadow-lg z-[100] pointer-events-none"
+          >
+            {toastMsg}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

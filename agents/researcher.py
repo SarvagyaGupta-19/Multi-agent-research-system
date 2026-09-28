@@ -23,19 +23,18 @@ logger = logging.getLogger(__name__)
 def _build_search_query(state: ResearchState) -> str:
     """Build an effective search query from state.
 
-    Incorporates topic and optionally memory context for better results.
+    BP-13: Memory context from prior sessions must NOT be mixed into the
+    Tavily search query. It could contain different topics and silently
+    corrupts the search with irrelevant context. The search query is
+    purely the current topic. Memory context is used separately by LLM agents.
 
     Args:
         state: The current research state.
 
     Returns:
-        A search query string.
+        A search query string (the topic only).
     """
-    query = state["topic"]
-    if state.get("memory_context"):
-        # Append memory context as additional search context
-        query = f"{query} {state['memory_context'][:200]}"
-    return query
+    return state["topic"]  # BP-13: topic only, no memory context contamination
 
 
 def run_researcher(state: ResearchState, settings: "Settings | None" = None) -> ResearchState:

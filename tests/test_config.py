@@ -15,7 +15,7 @@ class TestSettings:
         s = Settings(GROQ_API_KEY="gsk_test123", TAVILY_API_KEY="tvly_test456")
         assert s.GROQ_API_KEY == "gsk_test123"
         assert s.TAVILY_API_KEY == "tvly_test456"
-        assert s.GROQ_MODEL == "llama-3.3-70b-versatile"
+        assert s.GROQ_MODEL == "qwen/qwen3.8-27b"
         assert s.GROQ_TIMEOUT == 30
         assert s.GROQ_MAX_RETRIES == 3
         assert s.TAVILY_MAX_RESULTS == 5

@@ -23,7 +23,7 @@ _DEFAULT_DB_DIR = Path(__file__).resolve().parent.parent / "data"
 _DEFAULT_DB_PATH = _DEFAULT_DB_DIR / "jobs.db"
 
 # Valid job statuses
-VALID_STATUSES = {"queued", "running", "complete", "failed"}
+VALID_STATUSES = {"queued", "running", "complete", "failed", "cancelled"}  # BP-02: added cancelled
 
 
 class JobStore:
@@ -228,3 +228,50 @@ class JobStore:
         if updated:
             logger.info("JobStore: stored error for job %s", job_id)
         return updated
+
+    def cancel_job(self, job_id: str) -> bool:
+        """Mark a job as cancelled.
+
+        BP-02: Called by DELETE /research/{job_id}. The background worker
+        checks is_cancelled() between pipeline stages and exits early.
+
+        Args:
+            job_id: The job ID to cancel.
+
+        Returns:
+            True if found and updated, False if not found or already terminal.
+        """
+        with self._lock:
+            with contextlib.closing(self._get_conn()) as conn:
+                with conn:
+                    cursor = conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = 'cancelled', updated_at = ?
+                        WHERE job_id = ? AND status IN ('queued', 'running')
+                        """,
+                        (self._now(), job_id),
+                    )
+                    updated = cursor.rowcount > 0
+
+        if updated:
+            logger.info("JobStore: cancelled job %s", job_id)
+        return updated
+
+    def is_cancelled(self, job_id: str) -> bool:
+        """Check whether a job has been cancelled.
+
+        BP-02: Called by background worker threads to check for early exit.
+
+        Args:
+            job_id: The job ID to check.
+
+        Returns:
+            True if the job status is 'cancelled'.
+        """
+        with self._lock:
+            with contextlib.closing(self._get_conn()) as conn:
+                row = conn.execute(
+                    "SELECT status FROM jobs WHERE job_id = ?", (job_id,)
+                ).fetchone()
+        return row is not None and row["status"] == "cancelled"

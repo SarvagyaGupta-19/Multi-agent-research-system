@@ -66,9 +66,12 @@ def compress_research(
 ) -> ResearchState:
     """Compress raw research into a manageable size for downstream agents.
 
-    If raw_research exceeds MAX_CONTEXT_CHARS, truncates it and stores
-    the result in compressed_research. Otherwise, copies raw_research
-    directly to compressed_research.
+    BP-08: Uses per-source fair truncation so all sources are represented.
+    Previously the whole blob was head-truncated, meaning sources 2-5 could
+    be entirely cut if source 1 was large.
+
+    Each source gets an equal budget of max_chars // num_sources characters.
+    If no source boundaries are detected, falls back to middle truncation.
 
     Args:
         state: The current ResearchState with raw_research populated.
@@ -95,11 +98,42 @@ def compress_research(
             "copying directly",
             len(raw), max_chars,
         )
-    else:
-        state["compressed_research"] = truncate_text(raw, max_chars, strategy="tail")
+        return state
+
+    # BP-08: Split into per-source sections and budget chars fairly
+    # Sections are delimited by the "--- Source:" header written by researcher.py
+    import re
+    sections = re.split(r"(?=--- Source:)", raw)
+    sections = [s for s in sections if s.strip()]
+
+    if not sections:
+        # Fallback: no source headers found, use middle truncation to preserve edges
+        state["compressed_research"] = truncate_text(raw, max_chars, strategy="middle")
         logger.info(
-            "compress_research: truncated from %d to %d chars",
+            "compress_research: no source sections found, middle-truncated from %d to %d chars",
             len(raw), len(state["compressed_research"]),
         )
+        return state
 
+    # Equal budget per source (minimum 200 chars per source)
+    per_source_budget = max(200, max_chars // len(sections))
+    compressed_parts = []
+    total = 0
+
+    for section in sections:
+        if total >= max_chars:
+            break
+        allowed = min(per_source_budget, max_chars - total)
+        chunk = section[:allowed]
+        if len(section) > allowed:
+            chunk += "\n[... source truncated ...]"
+        compressed_parts.append(chunk)
+        total += len(chunk)
+
+    state["compressed_research"] = "\n".join(compressed_parts)
+    logger.info(
+        "compress_research: distributed %d sources into %d chars (max %d), "
+        "budget %d chars/source",
+        len(sections), len(state["compressed_research"]), max_chars, per_source_budget,
+    )
     return state

@@ -159,8 +159,13 @@ class TestRunResearcher:
         assert result["errors"][0] == "pre-existing error"
 
     @patch("agents.researcher.TavilyClient")
-    def test_memory_context_appended_to_query(self, mock_tavily_cls):
-        """Memory context should augment the search query."""
+    def test_memory_context_not_in_search_query(self, mock_tavily_cls):
+        """BP-13: Memory context must NOT contaminate the Tavily search query.
+
+        Prior sessions' memory could be about completely different topics.
+        The search query should be the pure topic only.
+        Memory context remains in state for LLM agents to use as additional context.
+        """
         mock_client = MagicMock()
         mock_tavily_cls.return_value = mock_client
         mock_client.search.return_value = _make_tavily_response([
@@ -172,7 +177,8 @@ class TestRunResearcher:
         settings = _make_settings()
         run_researcher(state, settings=settings)
 
-        # Verify the query passed to Tavily includes memory context
+        # BP-13: Verify the query is ONLY the topic, not contaminated with memory
         call_args = mock_client.search.call_args
         query = call_args.kwargs.get("query") or call_args[0][0]
-        assert "RLHF" in query
+        assert query == "AI safety", f"Expected pure topic query, got: {query!r}"
+        assert "RLHF" not in query, "Memory context must not appear in search query (BP-13)"

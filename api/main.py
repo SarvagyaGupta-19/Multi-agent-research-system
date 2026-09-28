@@ -2,17 +2,19 @@
 FastAPI backend — exposes the research pipeline as a REST API.
 
 Endpoints:
-- POST /research       — Create a research job (returns job_id)
-- GET  /research/{id}  — Get job status and result
-- GET  /health         — Health check
+- POST   /research       — Create a research job (returns job_id)
+- GET    /research/{id}  — Get job status and result
+- DELETE /research/{id}  — Cancel a running job         [BP-02]
+- GET    /health         — Health check
 
-Jobs run in background threads and results are persisted in SQLite.
+Jobs run in a bounded ThreadPoolExecutor (max 5 concurrent).  [BP-01]
 """
 
 import logging
-import threading
 import traceback
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor  # BP-01: bounded thread pool
+from contextlib import asynccontextmanager           # BP-18: modern lifespan
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,12 +26,30 @@ from graph.workflow import run_research
 
 logger = logging.getLogger(__name__)
 
+# BP-01: Bounded thread pool — max 5 concurrent research jobs.
+# Prevents unbounded thread spawning under load.
+_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="research-worker")
+
+# BP-18: Modern lifespan replaces deprecated @app.on_event("startup")
+@asynccontextmanager
+async def lifespan(app_instance: "FastAPI"):
+    """Initialize shared resources on startup, clean up on shutdown."""
+    global _job_store
+    _job_store = JobStore()
+    logger.info("API: startup complete, job store initialized (lifespan)")
+    yield
+    # Graceful shutdown: stop accepting new jobs, wait for running ones
+    _executor.shutdown(wait=False)
+    logger.info("API: shutdown complete")
+
+
 # --- App setup ---
 
 app = FastAPI(
     title="Multi-Agent Research System",
     description="A 4-agent autonomous research pipeline with structured fact-checking and trust scoring.",
     version="0.3.0",
+    lifespan=lifespan,  # BP-18: use lifespan instead of on_event
 )
 
 # Load settings on startup to configure the app and fail fast if keys are missing
@@ -63,19 +83,31 @@ def _get_store() -> JobStore:
 
 # --- Pydantic models ---
 
+# BP-09: Valid style and model values as Literal types to prevent arbitrary strings
+# reaching the Groq SDK (which would cause BadRequestError crashes).
+ALLOWED_STYLES = Literal["academic", "blog", "executive summary", "technical", "summary"]
+ALLOWED_MODELS = Literal[
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+]
+
+
 class ResearchRequest(BaseModel):
     """Request body for POST /research."""
     topic: str = Field(..., min_length=1, max_length=500, description="The research topic/query.")
-    style: str = Field(
+    style: ALLOWED_STYLES = Field(
         default="academic",
-        description="Writing style: academic, blog, executive summary, or technical.",
+        description="Writing style: academic, blog, executive summary, technical, or summary.",
     )
-    model: str = Field(
-        default="llama-3.3-70b-versatile",
+    model: ALLOWED_MODELS = Field(
+        default="qwen/qwen3.8-27b",
         description="The Groq LLM model to use.",
     )
     skip_memory: bool = Field(default=False, description="If true, skip Mem0 context lookup.")
-    session_id: str = Field(default="", description="Session ID for memory scoping.")
+    session_id: str = Field(default="", max_length=128, description="Session ID for memory scoping.")
 
 
 class JobCreatedResponse(BaseModel):
@@ -110,7 +142,8 @@ def _run_research_worker(
 ) -> None:
     """Background worker that runs the research pipeline for a job.
 
-    Updates job status and result/error in the store.
+    Checks for cancellation (BP-02) before starting and marks job as
+    cancelled if flagged. Runs inside a bounded ThreadPoolExecutor (BP-01).
 
     Args:
         job_id: The job ID to update.
@@ -122,11 +155,22 @@ def _run_research_worker(
     """
     store = _get_store()
 
+    # BP-02: Check for pre-start cancellation (user cancelled before worker dequeued)
+    if store.is_cancelled(job_id):
+        logger.info("Worker: job %s was cancelled before starting, skipping", job_id)
+        return
+
     try:
         store.update_status(job_id, "running")
         logger.info("Worker: starting research for job %s (topic='%s', model='%s')", job_id, topic, model)
 
         settings = load_settings()
+
+        # BP-02: Check cancellation again before the long pipeline call
+        if store.is_cancelled(job_id):
+            logger.info("Worker: job %s cancelled mid-start, aborting", job_id)
+            return
+
         result = run_research(
             topic=topic,
             style=style,
@@ -136,6 +180,11 @@ def _run_research_worker(
             settings=settings,
         )
 
+        # BP-02: Final cancellation check before storing result
+        if store.is_cancelled(job_id):
+            logger.info("Worker: job %s cancelled post-pipeline, discarding result", job_id)
+            return
+
         # Convert TypedDict to regular dict for JSON serialization
         result_dict = dict(result)
         store.update_result(job_id, result_dict)
@@ -143,6 +192,10 @@ def _run_research_worker(
         logger.info("Worker: completed job %s", job_id)
 
     except Exception as e:
+        # Don't overwrite a cancelled status with failed
+        if store.is_cancelled(job_id):
+            logger.info("Worker: job %s was cancelled, ignoring exception: %s", job_id, e)
+            return
         err_str = str(e)
         if "Rate Limit Exceeded" in err_str or "Bad Request" in err_str:
             error_msg = err_str
@@ -152,15 +205,7 @@ def _run_research_worker(
         logger.error("Worker: job %s failed: %s", job_id, error_msg)
 
 
-# --- Startup event ---
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the job store on app startup."""
-    global _job_store
-    _job_store = JobStore()
-    logger.info("API: startup complete, job store initialized")
-
+# Removed: @app.on_event("startup") — BP-18: replaced with lifespan context manager above
 
 # --- Endpoints ---
 
@@ -194,18 +239,42 @@ async def create_research_job(request: ResearchRequest):
         session_id=request.session_id,
     )
 
-    # Launch background worker
-    worker = threading.Thread(
-        target=_run_research_worker,
-        args=(job_id, topic, request.style, request.model, request.skip_memory, request.session_id),
-        daemon=True,
-        name=f"research-worker-{job_id[:8]}",
+    # BP-01: Submit to bounded ThreadPoolExecutor instead of raw Thread
+    _executor.submit(
+        _run_research_worker,
+        job_id, topic, request.style, request.model, request.skip_memory, request.session_id,
     )
-    worker.start()
 
-    logger.info("API: created job %s, worker launched", job_id)
+    logger.info("API: created job %s, submitted to thread pool", job_id)
 
     return JobCreatedResponse(job_id=job_id)
+
+
+@app.delete("/research/{job_id}", status_code=200)  # BP-02: Cancel endpoint
+async def cancel_research_job(job_id: str):
+    """Cancel a queued or running research job.
+
+    Marks the job as 'cancelled' in the store. The background worker
+    checks this flag and exits early. The LLM pipeline call itself
+    cannot be interrupted mid-call, but all subsequent stages are skipped.
+
+    Returns:
+        200 with confirmation, or 404 if not found, 409 if already terminal.
+    """
+    store = _get_store()
+    cancelled = store.cancel_job(job_id)
+
+    if not cancelled:
+        job = store.get_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job '{job_id}' is already in terminal state '{job['status']}' and cannot be cancelled.",
+        )
+
+    logger.info("API: cancelled job %s", job_id)
+    return {"job_id": job_id, "status": "cancelled", "message": "Job cancellation requested."}
 
 
 @app.get("/research/{job_id}", response_model=JobStatusResponse)
